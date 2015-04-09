@@ -239,6 +239,7 @@ func (p *Parser) analyzeImages() []parseResultImage {
 
 	ch := make(chan image)
 	returned_images := make([]parseResultImage, 0)
+	found_images := 0
 
 	for _, tag := range p.imgTags {
 		go func(tag imgTag) {
@@ -260,9 +261,10 @@ func (p *Parser) analyzeImages() []parseResultImage {
 
 			ch <- img
 		}(tag)
+		found_images++
 	}
 
-	if len(returned_images) == 0 {
+	if found_images == 0 {
 		return returned_images
 	}
 
