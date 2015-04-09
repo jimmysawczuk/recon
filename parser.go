@@ -79,13 +79,13 @@ var targetedProperties = map[string]float64{
 }
 
 var propertyMap = map[string][]string{
-	"URL":         []string{"og:url"},
-	"Site":        []string{"og:site_name", "site_name"},
-	"Title":       []string{"og:title", "title"},
-	"Type":        []string{"og:type", "type"},
-	"Description": []string{"og:description", "description"},
-	"Author":      []string{"og:author", "author"},
-	"Publisher":   []string{"og:publisher", "publisher"},
+	"URL":         {"og:url"},
+	"Site":        {"og:site_name", "site_name"},
+	"Title":       {"og:title", "title"},
+	"Type":        {"og:type", "type"},
+	"Description": {"og:description", "description"},
+	"Author":      {"og:author", "author"},
+	"Publisher":   {"og:publisher", "publisher"},
 }
 
 var OptimalAspectRatio = 1.91
