@@ -262,6 +262,10 @@ func (p *Parser) analyzeImages() []parseResultImage {
 		}(tag)
 	}
 
+	if len(returned_images) == 0 {
+		return returned_images
+	}
+
 	for {
 		select {
 		case incoming_img := <-ch:
