@@ -24,16 +24,16 @@ type Parser struct {
 }
 
 type ParseResult struct {
-	URL         string             `json:"url"`
-	Host        string             `json:"host"`
-	Site        string             `json:"site_name"`
-	Title       string             `json:"title"`
-	Type        string             `json:"type"`
-	Description string             `json:"description"`
-	Author      string             `json:"author"`
-	Publisher   string             `json:"publisher"`
-	Images      []parseResultImage `json:"images"`
-	Scraped     time.Time          `json:"scraped"`
+	URL         string    `json:"url"`
+	Host        string    `json:"host"`
+	Site        string    `json:"site_name"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"`
+	Description string    `json:"description"`
+	Author      string    `json:"author"`
+	Publisher   string    `json:"publisher"`
+	Images      []Image   `json:"images"`
+	Scraped     time.Time `json:"scraped"`
 }
 
 type metaTag struct {
@@ -48,7 +48,7 @@ type imgTag struct {
 	preferred bool
 }
 
-type parseResultImage struct {
+type Image struct {
 	URL         string  `json:"url"`
 	Type        string  `json:"type"`
 	Width       int     `json:"width"`
@@ -58,7 +58,7 @@ type parseResultImage struct {
 	Preferred   bool    `json:"preferred,omitempty"`
 }
 
-type byPreferred []parseResultImage
+type byPreferred []Image
 
 var targetedProperties = map[string]float64{
 	"og:site_name":   1,
@@ -228,7 +228,7 @@ func (p *Parser) getMaxProperty(key string) (val string) {
 	return
 }
 
-func (p *Parser) analyzeImages() []parseResultImage {
+func (p *Parser) analyzeImages() []Image {
 	type image struct {
 		url          string
 		data         io.Reader
@@ -238,7 +238,7 @@ func (p *Parser) analyzeImages() []parseResultImage {
 	}
 
 	ch := make(chan image)
-	returned_images := make([]parseResultImage, 0)
+	returned_images := make([]Image, 0)
 	found_images := 0
 
 	for _, tag := range p.imgTags {
@@ -271,7 +271,7 @@ func (p *Parser) analyzeImages() []parseResultImage {
 	for {
 		select {
 		case incoming_img := <-ch:
-			ret_image := parseResultImage{}
+			ret_image := Image{}
 			switch incoming_img.content_type {
 			case "image/jpeg":
 				img, _ := jpeg.Decode(incoming_img.data)
