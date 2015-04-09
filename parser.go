@@ -1,12 +1,14 @@
-package main
+package recon
 
 import (
 	"fmt"
 	"golang.org/x/net/html"
 	"io"
+	"math"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"sort"
 	"time"
 
 	"image/gif"
@@ -47,13 +49,16 @@ type imgTag struct {
 }
 
 type parseResultImage struct {
-	URL       string `json:"url"`
-	Type      string `json:"type"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
-	Alt       string `json:"alt"`
-	Preferred bool   `json:"preferred,omitempty"`
+	URL         string  `json:"url"`
+	Type        string  `json:"type"`
+	Width       int     `json:"width"`
+	Height      int     `json:"height"`
+	Alt         string  `json:"alt"`
+	AspectRatio float64 `json:"aspectRatio"`
+	Preferred   bool    `json:"preferred,omitempty"`
 }
+
+type byPreferred []parseResultImage
 
 var targetedProperties = map[string]float64{
 	"og:site_name":   1,
@@ -62,6 +67,7 @@ var targetedProperties = map[string]float64{
 	"og:description": 1,
 	"og:author":      1,
 	"og:publisher":   1,
+	"og:url":         1,
 	"og:image":       1,
 
 	"site_name":   0.5,
@@ -73,6 +79,7 @@ var targetedProperties = map[string]float64{
 }
 
 var propertyMap = map[string][]string{
+	"URL":         []string{"og:url"},
 	"Site":        []string{"og:site_name", "site_name"},
 	"Title":       []string{"og:title", "title"},
 	"Type":        []string{"og:type", "type"},
@@ -80,6 +87,8 @@ var propertyMap = map[string][]string{
 	"Author":      []string{"og:author", "author"},
 	"Publisher":   []string{"og:publisher", "publisher"},
 }
+
+var OptimalAspectRatio = 1.91
 
 func NewParser() Parser {
 	client := http.DefaultClient
@@ -175,7 +184,11 @@ func (p *Parser) parseImg(t html.Token) (i imgTag) {
 
 func (p *Parser) buildResult() ParseResult {
 	res := ParseResult{}
-	res.URL = p.req.URL.String()
+	if canonical_url := p.getMaxProperty("URL"); canonical_url != "" {
+		res.URL = canonical_url
+	} else {
+		res.URL = p.req.URL.String()
+	}
 	res.Host = p.req.URL.Host
 
 	res.Site = p.getMaxProperty("Site")
@@ -273,6 +286,11 @@ func (p *Parser) analyzeImages() []parseResultImage {
 				ret_image.Height = bounds.Max.Y
 
 			}
+
+			if ret_image.Height > 0 {
+				ret_image.AspectRatio = round(float64(ret_image.Width)/float64(ret_image.Height), 1e-4)
+			}
+
 			ret_image.Type = incoming_img.content_type
 			ret_image.URL = incoming_img.url
 			ret_image.Alt = incoming_img.alt
@@ -286,5 +304,34 @@ func (p *Parser) analyzeImages() []parseResultImage {
 		}
 	}
 
+	sort.Sort(byPreferred(returned_images))
+
 	return returned_images
+}
+
+func (t byPreferred) Less(a, b int) bool {
+	if t[a].Preferred && !t[b].Preferred {
+		return true
+	}
+
+	if !t[a].Preferred && t[b].Preferred {
+		return false
+	}
+
+	a_diff := math.Abs(t[a].AspectRatio - OptimalAspectRatio)
+	b_diff := math.Abs(t[b].AspectRatio - OptimalAspectRatio)
+
+	return a_diff < b_diff
+}
+
+func (t byPreferred) Swap(a, b int) {
+	t[a], t[b] = t[b], t[a]
+}
+
+func (t byPreferred) Len() int {
+	return len(t)
+}
+
+func round(a float64, prec float64) float64 {
+	return math.Floor(a/prec+0.5) * prec
 }
