@@ -30,16 +30,32 @@ type ParseResult struct {
 	// URL is either the URL as-passed or the defined URL (via og:url) if present
 	URL string `json:"url"`
 
-	// Host
-	Host        string    `json:"host"`
-	Site        string    `json:"site_name"`
-	Title       string    `json:"title"`
-	Type        string    `json:"type"`
-	Description string    `json:"description"`
-	Author      string    `json:"author"`
-	Publisher   string    `json:"publisher"`
-	Images      []Image   `json:"images"`
-	Scraped     time.Time `json:"scraped"`
+	// Host is the domain of the URL as-passed or the defined URL if present
+	Host string `json:"host"`
+
+	// Site is the name of the site as defined via og:site_name or site_name
+	Site string `json:"site_name"`
+
+	// Title is the title of the page as defined via og:title or title
+	Title string `json:"title"`
+
+	// Type is the type of the page (article, video, etc.) as defined via og:type or type.
+	Type string `json:"type"`
+
+	// Description is the description of the page as defined via og:description or description.
+	Description string `json:"description"`
+
+	// Author is the author of the page as defined via og:author or author.
+	Author string `json:"author"`
+
+	// Publisher is the publisher of the page as defined via og:publisher or publisher.
+	Publisher string `json:"publisher"`
+
+	// Images is the collection of images parsed from the page using either og:image meta tags or <img> tags.
+	Images []Image `json:"images"`
+
+	// Scraped is the time when the page was scraped (or the time Parse was run).
+	Scraped time.Time `json:"scraped"`
 }
 
 type metaTag struct {
@@ -54,6 +70,7 @@ type imgTag struct {
 	preferred bool
 }
 
+// Image contains information about parsed images on the page
 type Image struct {
 	URL         string  `json:"url"`
 	Type        string  `json:"type"`
@@ -149,7 +166,7 @@ func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResul
 			t := decoder.Token()
 			if t.Data == "meta" {
 				res := p.parseMeta(t)
-				if res.priority > 0 {
+				if res.priority > confidence {
 					p.metaTags = append(p.metaTags, res)
 				}
 			} else if t.Data == "img" {
@@ -184,9 +201,9 @@ func (p *Parser) parseMeta(t html.Token) metaTag {
 
 	if priority > 0 {
 		return metaTag{name: tag, value: content, priority: priority}
-	} else {
-		return metaTag{}
 	}
+
+	return metaTag{}
 }
 
 func (p *Parser) parseImg(t html.Token) (i imgTag) {
@@ -200,9 +217,9 @@ func (p *Parser) parseImg(t html.Token) (i imgTag) {
 
 	if i.url != "" {
 		return
-	} else {
-		return imgTag{}
 	}
+
+	return imgTag{}
 }
 
 func (p *Parser) buildResult() ParseResult {
