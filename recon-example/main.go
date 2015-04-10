@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"recon"
+	"github.com/jimmysawczuk/recon"
 )
 
 func main() {
