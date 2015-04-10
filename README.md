@@ -1,5 +1,7 @@
 # recon
 
+[![Build Status](https://travis-ci.org/jimmysawczuk/recon.svg)](https://travis-ci.org/jimmysawczuk/recon)
+
 Package recon is a library to retrieve HTML documents from the Internet and extract [OpenGraph][ogp]-related information from the page.
 
 ## Documentation

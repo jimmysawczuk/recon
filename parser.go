@@ -141,17 +141,36 @@ func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResul
 	}
 
 	p.reset()
+	resp, err := p.doRequest(url)
+	if err != nil {
+		return ParseResult{}, err
+	}
 
+	p.tokenize(resp.Body, confidence)
+
+	res := p.buildResult()
+
+	return res, nil
+}
+
+func (p *Parser) doRequest(url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %s, url: %s", err, url)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return ParseResult{}, fmt.Errorf("http error: %s", err)
+		return nil, fmt.Errorf("http error: %s, url: %s", err, url)
 	}
 
 	p.req = req
 
-	decoder := html.NewTokenizer(resp.Body)
+	return resp, nil
+}
+
+func (p *Parser) tokenize(body io.Reader, confidence float64) error {
+	decoder := html.NewTokenizer(body)
 	done := false
 	for !done {
 		tt := decoder.Next()
@@ -159,9 +178,9 @@ func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResul
 		case html.ErrorToken:
 			if decoder.Err() == io.EOF {
 				done = true
-			} else {
-				// fmt.Println(decoder.Err())
-			}
+			} // else {
+			// fmt.Println(decoder.Err())
+			// }
 		case html.SelfClosingTagToken:
 			t := decoder.Token()
 			if t.Data == "meta" {
@@ -178,9 +197,7 @@ func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResul
 		}
 	}
 
-	res := p.buildResult()
-
-	return res, nil
+	return nil
 }
 
 func (p *Parser) parseMeta(t html.Token) metaTag {
@@ -319,22 +336,27 @@ func (p *Parser) analyzeImages() []Image {
 			switch incoming_img.content_type {
 			case "image/jpeg":
 				img, _ := jpeg.Decode(incoming_img.data)
-				bounds := img.Bounds()
-				ret_image.Width = bounds.Max.X
-				ret_image.Height = bounds.Max.Y
+				if img != nil {
+					bounds := img.Bounds()
+					ret_image.Width = bounds.Max.X
+					ret_image.Height = bounds.Max.Y
+				}
 
 			case "image/gif":
 				img, _ := gif.Decode(incoming_img.data)
-				bounds := img.Bounds()
-				ret_image.Width = bounds.Max.X
-				ret_image.Height = bounds.Max.Y
+				if img != nil {
+					bounds := img.Bounds()
+					ret_image.Width = bounds.Max.X
+					ret_image.Height = bounds.Max.Y
+				}
 
 			case "image/png":
 				img, _ := png.Decode(incoming_img.data)
-				bounds := img.Bounds()
-				ret_image.Width = bounds.Max.X
-				ret_image.Height = bounds.Max.Y
-
+				if img != nil {
+					bounds := img.Bounds()
+					ret_image.Width = bounds.Max.X
+					ret_image.Height = bounds.Max.Y
+				}
 			}
 
 			if ret_image.Height > 0 {
