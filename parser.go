@@ -1,3 +1,4 @@
+// Package recon scrapes URLs for OpenGraph information.
 package recon
 
 import (
@@ -16,6 +17,7 @@ import (
 	"image/png"
 )
 
+// Parser is the client object and holds the relevant information needed when parsing a URL
 type Parser struct {
 	client   *http.Client
 	req      *http.Request
@@ -23,8 +25,12 @@ type Parser struct {
 	imgTags  []imgTag
 }
 
+// ParseResult is what comes back from a Parse
 type ParseResult struct {
-	URL         string    `json:"url"`
+	// URL is either the URL as-passed or the defined URL (via og:url) if present
+	URL string `json:"url"`
+
+	// Host
 	Host        string    `json:"host"`
 	Site        string    `json:"site_name"`
 	Title       string    `json:"title"`
@@ -88,20 +94,37 @@ var propertyMap = map[string][]string{
 	"Publisher":   {"og:publisher", "publisher"},
 }
 
+// OptimalAspectRatio is the target aspect ratio that recon favors when looking at images
 var OptimalAspectRatio = 1.91
 
+// NewParser returns a new Parser object
 func NewParser() Parser {
+	p := Parser{}
+	return p
+}
+
+func (p *Parser) reset() {
 	client := http.DefaultClient
 	client.Jar, _ = cookiejar.New(nil)
 
-	return Parser{
-		client:   client,
-		imgTags:  make([]imgTag, 0),
-		metaTags: make([]metaTag, 0),
-	}
+	p.client = client
+	p.imgTags = make([]imgTag, 0)
+	p.metaTags = make([]metaTag, 0)
 }
 
+// Parse takes a url and attempts to parse it using a default minimum confidence of 0 (all information is used).
 func (p *Parser) Parse(url string) (ParseResult, error) {
+	return p.ParseWithConfidence(url, 0)
+}
+
+// ParseWithConfidence takes a url and attempts to parse it, only considering information with a confidence above the minimum confidence provided (should be between 0 and 1).
+func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResult, error) {
+	if confidence < 0 || confidence > 1 {
+		return ParseResult{}, fmt.Errorf("ParseWithConfidence: confidence should between 0 and 1 inclusive, is %d", confidence)
+	}
+
+	p.reset()
+
 	req, err := http.NewRequest("GET", url, nil)
 
 	resp, err := p.client.Do(req)
@@ -184,12 +207,16 @@ func (p *Parser) parseImg(t html.Token) (i imgTag) {
 
 func (p *Parser) buildResult() ParseResult {
 	res := ParseResult{}
-	if canonical_url := p.getMaxProperty("URL"); canonical_url != "" {
-		res.URL = canonical_url
-	} else {
-		res.URL = p.req.URL.String()
-	}
+
+	res.URL = p.req.URL.String()
 	res.Host = p.req.URL.Host
+	if canonical_url_str := p.getMaxProperty("URL"); canonical_url_str != "" {
+		canonical_url, err := url.Parse(canonical_url_str)
+		if err == nil {
+			res.URL = canonical_url.String()
+			res.Host = canonical_url.Host
+		}
+	}
 
 	res.Site = p.getMaxProperty("Site")
 	res.Title = p.getMaxProperty("Title")
