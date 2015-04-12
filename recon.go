@@ -329,7 +329,8 @@ func (p *Parser) analyzeImages() []Image {
 		return returned_images
 	}
 
-	for {
+	timed_out := false
+	for !timed_out {
 		select {
 		case incoming_img := <-ch:
 			ret_image := Image{}
@@ -369,9 +370,12 @@ func (p *Parser) analyzeImages() []Image {
 			ret_image.Preferred = incoming_img.preferred
 
 			returned_images = append(returned_images, ret_image)
+
+		case <-time.After(30 * time.Second):
+			timed_out = true
 		}
 
-		if len(returned_images) >= len(p.imgTags) {
+		if len(returned_images) >= len(p.imgTags) || timed_out {
 			break
 		}
 	}
