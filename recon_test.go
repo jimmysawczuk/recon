@@ -36,8 +36,9 @@ func testParse(t *testing.T, url string, local string, confidence float64, expec
 
 	res := p.buildResult()
 
-	assert.Equal(expected.Title, res.Title)
-	assert.Equal(expected.Author, res.Author)
+	assert.Equal(expected.Title, res.Title, "Titles should match")
+	assert.Equal(expected.Author, res.Author, "Authors should match")
+	assert.Equal(expected.Site, res.Site, "Sites should match")
 }
 
 func TestParseNYT(t *testing.T) {
@@ -62,6 +63,7 @@ func TestParseJS(t *testing.T) {
 		ParseResult{
 			Title:  `Once more, with feeling`,
 			Author: ``,
+			Site:   `Cleveland, Curveballs and Common Sense`,
 		},
 	)
 }
@@ -73,8 +75,23 @@ func TestParse538(t *testing.T) {
 		"test-html/fivethirtyeight-33-weirdest-charts.html",
 		0,
 		ParseResult{
-			Title: `Our 33 Weirdest Charts From 2014`,
-			Site:  `FiveThirtyEight`,
+			Title:  `Our 33 Weirdest Charts From 2014`,
+			Site:   `FiveThirtyEight`,
+			Author: `Andrei Scheinkman`,
+		},
+	)
+}
+
+func TestParseCNN(t *testing.T) {
+	testParse(
+		t,
+		"http://www.cnn.com/2015/04/14/us/georgia-atlanta-public-schools-cheating-scandal-verdicts/index.html",
+		"test-html/cnn-open-tag-test.html",
+		0,
+		ParseResult{
+			Title:  `Prison time for some Atlanta school educators in cheating scandal - CNN.com`,
+			Site:   `CNN`,
+			Author: `Ashley Fantz, CNN`,
 		},
 	)
 }

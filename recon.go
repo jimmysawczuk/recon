@@ -182,7 +182,7 @@ func (p *Parser) tokenize(body io.Reader, confidence float64) error {
 			} // else {
 			// fmt.Println(decoder.Err())
 			// }
-		case html.SelfClosingTagToken:
+		case html.SelfClosingTagToken, html.StartTagToken:
 			t := decoder.Token()
 			if t.Data == "meta" {
 				res := p.parseMeta(t)
