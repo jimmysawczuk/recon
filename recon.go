@@ -10,6 +10,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"image/gif"
@@ -303,10 +304,15 @@ func (p *Parser) analyzeImages() []Image {
 	found_images := 0
 
 	for _, tag := range p.imgTags {
-		go func(tag imgTag) {
-			img_url, _ := url.Parse(tag.url)
-			img_url = p.req.URL.ResolveReference(img_url)
+		img_url, _ := url.Parse(tag.url)
+		img_url = p.req.URL.ResolveReference(img_url)
 
+		// TODO: actually handle data urls
+		if strings.HasPrefix(img_url.String(), "data:") {
+			continue
+		}
+
+		go func(img_url *url.URL, tag imgTag) {
 			req, _ := http.NewRequest("GET", img_url.String(), nil)
 			resp, _ := p.client.Do(req)
 
@@ -321,7 +327,8 @@ func (p *Parser) analyzeImages() []Image {
 			}
 
 			ch <- img
-		}(tag)
+		}(img_url, tag)
+
 		found_images++
 	}
 
@@ -330,7 +337,7 @@ func (p *Parser) analyzeImages() []Image {
 	}
 
 	timed_out := false
-	for !timed_out {
+	for {
 		select {
 		case incoming_img := <-ch:
 			ret_image := Image{}
@@ -371,11 +378,11 @@ func (p *Parser) analyzeImages() []Image {
 
 			returned_images = append(returned_images, ret_image)
 
-		case <-time.After(30 * time.Second):
+		case <-time.After(10 * time.Second):
 			timed_out = true
 		}
 
-		if len(returned_images) >= len(p.imgTags) || timed_out {
+		if len(returned_images) >= found_images || timed_out {
 			break
 		}
 	}
