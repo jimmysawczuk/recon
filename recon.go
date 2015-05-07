@@ -115,6 +115,9 @@ var propertyMap = map[string][]string{
 // OptimalAspectRatio is the target aspect ratio that recon favors when looking at images
 var OptimalAspectRatio = 1.91
 
+// ImageLookupTimeout is the maximum amount of time recon will spend downloading and analyzing images
+var ImageLookupTimeout = 10 * time.Second
+
 // NewParser returns a new Parser object
 func NewParser() Parser {
 	p := Parser{}
@@ -179,9 +182,8 @@ func (p *Parser) tokenize(body io.Reader, confidence float64) error {
 		case html.ErrorToken:
 			if decoder.Err() == io.EOF {
 				done = true
-			} // else {
-			// fmt.Println(decoder.Err())
-			// }
+			}
+
 		case html.SelfClosingTagToken, html.StartTagToken:
 			t := decoder.Token()
 			if t.Data == "meta" {
@@ -193,6 +195,15 @@ func (p *Parser) tokenize(body io.Reader, confidence float64) error {
 				res := p.parseImg(t)
 				if res.url != "" {
 					p.imgTags = append(p.imgTags, res)
+				}
+			} else if t.Data == "title" {
+				text_node := decoder.Next()
+				if text_node == html.TextToken {
+					content := decoder.Token()
+					res := p.parseTitle(content)
+					if res.priority > confidence {
+						p.metaTags = append(p.metaTags, res)
+					}
 				}
 			}
 		}
@@ -238,6 +249,10 @@ func (p *Parser) parseImg(t html.Token) (i imgTag) {
 	}
 
 	return imgTag{}
+}
+
+func (p *Parser) parseTitle(t html.Token) metaTag {
+	return metaTag{name: "title", value: t.Data, priority: 0.5}
 }
 
 func (p *Parser) buildResult() ParseResult {
@@ -337,8 +352,12 @@ func (p *Parser) analyzeImages() []Image {
 	}
 
 	timed_out := false
+	timed_out_ch := time.After(ImageLookupTimeout)
 	for {
 		select {
+		case <-timed_out_ch:
+			timed_out = true
+
 		case incoming_img := <-ch:
 			ret_image := Image{}
 			switch incoming_img.content_type {
@@ -377,12 +396,13 @@ func (p *Parser) analyzeImages() []Image {
 			ret_image.Preferred = incoming_img.preferred
 
 			returned_images = append(returned_images, ret_image)
-
-		case <-time.After(10 * time.Second):
-			timed_out = true
 		}
 
-		if len(returned_images) >= found_images || timed_out {
+		if timed_out {
+			break
+		}
+
+		if len(returned_images) >= found_images {
 			break
 		}
 	}
