@@ -141,7 +141,7 @@ func (p *Parser) Parse(url string) (ParseResult, error) {
 // ParseWithConfidence takes a url and attempts to parse it, only considering information with a confidence above the minimum confidence provided (should be between 0 and 1).
 func (p *Parser) ParseWithConfidence(url string, confidence float64) (ParseResult, error) {
 	if confidence < 0 || confidence > 1 {
-		return ParseResult{}, fmt.Errorf("ParseWithConfidence: confidence should between 0 and 1 inclusive, is %d", confidence)
+		return ParseResult{}, fmt.Errorf("ParseWithConfidence: confidence should between 0 and 1 inclusive, is %v", confidence)
 	}
 
 	p.reset()
