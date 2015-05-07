@@ -436,5 +436,6 @@ func (t byPreferred) Len() int {
 }
 
 func round(a float64, prec float64) float64 {
-	return math.Floor(a/prec+0.5) * prec
+	temp := int64(math.Floor(a/prec + 0.5))
+	return float64(temp) * prec
 }
