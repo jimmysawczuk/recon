@@ -6,9 +6,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func testParse(t *testing.T, url string, local string, confidence float64, expected ParseResult) {
+	ImageLookupTimeout = 30 * time.Second
+
 	assert := assert.New(t)
 
 	contents, err := ioutil.ReadFile(local)
@@ -96,6 +99,20 @@ func TestParseCNN(t *testing.T) {
 	)
 }
 
+func TestParseNoImage(t *testing.T) {
+	testParse(
+		t,
+		"http://localhost/no-img-test.html",
+		"test-html/no-img-test.html",
+		0,
+		ParseResult{
+			Title:  `Test`,
+			Site:   ``,
+			Author: ``,
+		},
+	)
+}
+
 func TestFullParse(t *testing.T) {
 	assert := assert.New(t)
 
@@ -104,4 +121,32 @@ func TestFullParse(t *testing.T) {
 
 	assert.Equal(err, nil, "err should be nil")
 	assert.Equal("Once more, with feeling", res.Title)
+}
+
+func TestFullParseWithTimeout(t *testing.T) {
+	assert := assert.New(t)
+
+	ImageLookupTimeout = 0 * time.Second
+
+	p := NewParser()
+	res, err := p.Parse("https://jimmysawczuk.com/2015/03/once-more-with-feeling.html")
+
+	assert.Equal(err, nil, "err should be nil")
+	assert.Equal("Once more, with feeling", res.Title)
+}
+
+func TestErrors(t *testing.T) {
+	assert := assert.New(t)
+
+	p := NewParser()
+	var err error
+
+	_, err = p.Parse("")
+	assert.NotNil(err)
+
+	_, err = p.Parse("invalid url")
+	assert.NotNil(err)
+
+	_, err = p.ParseWithConfidence("http://www.google.com", -1)
+	assert.NotNil(err)
 }
