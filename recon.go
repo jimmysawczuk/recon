@@ -163,6 +163,8 @@ func (p *Parser) doRequest(url string) (*http.Response, error) {
 		return nil, fmt.Errorf("error creating request: %s, url: %s", err, url)
 	}
 
+	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
+
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http error: %s, url: %s", err, url)
