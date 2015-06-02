@@ -331,6 +331,7 @@ func (p *Parser) analyzeImages() []Image {
 
 		go func(img_url *url.URL, tag imgTag) {
 			req, _ := http.NewRequest("GET", img_url.String(), nil)
+			req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
 			resp, _ := p.client.Do(req)
 
 			img := image{
