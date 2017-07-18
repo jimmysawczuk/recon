@@ -82,6 +82,14 @@ type Image struct {
 	Preferred   bool    `json:"preferred,omitempty"`
 }
 
+type parsedImage struct {
+	url         string
+	data        io.Reader
+	alt         string
+	contentType string
+	preferred   bool
+}
+
 type byPreferred []Image
 
 var targetedProperties = map[string]float64{
@@ -199,8 +207,8 @@ func (p *Parser) tokenize(body io.Reader, confidence float64) error {
 					p.imgTags = append(p.imgTags, res)
 				}
 			} else if t.Data == "title" {
-				text_node := decoder.Next()
-				if text_node == html.TextToken {
+				textNode := decoder.Next()
+				if textNode == html.TextToken {
 					content := decoder.Token()
 					res := p.parseTitle(content)
 					if res.priority > confidence {
@@ -262,11 +270,11 @@ func (p *Parser) buildResult() ParseResult {
 
 	res.URL = p.req.URL.String()
 	res.Host = p.req.URL.Host
-	if canonical_url_str := p.getMaxProperty("URL"); canonical_url_str != "" {
-		canonical_url, err := url.Parse(canonical_url_str)
+	if canonicalURLStr := p.getMaxProperty("URL"); canonicalURLStr != "" {
+		canonicalURL, err := url.Parse(canonicalURLStr)
 		if err == nil {
-			res.URL = canonical_url.String()
-			res.Host = canonical_url.Host
+			res.URL = canonicalURL.String()
+			res.Host = canonicalURL.Host
 		}
 	}
 
@@ -293,13 +301,13 @@ func (p *Parser) buildResult() ParseResult {
 }
 
 func (p *Parser) getMaxProperty(key string) (val string) {
-	max_priority := 0.0
+	maxWeight := 0.0
 
-	for _, search_tag := range propertyMap[key] {
+	for _, searchTag := range propertyMap[key] {
 		for _, tag := range p.metaTags {
-			if tag.name == search_tag && tag.priority > max_priority {
+			if tag.name == searchTag && tag.priority > maxWeight {
 				val = tag.value
-				max_priority = tag.priority
+				maxWeight = tag.priority
 			}
 		}
 	}
@@ -308,114 +316,55 @@ func (p *Parser) getMaxProperty(key string) (val string) {
 }
 
 func (p *Parser) analyzeImages() []Image {
-	type image struct {
-		url          string
-		data         io.Reader
-		alt          string
-		content_type string
-		preferred    bool
-	}
-
-	ch := make(chan image)
-	returned_images := make([]Image, 0)
-	found_images := 0
+	ch := make(chan parsedImage)
+	returned := []Image{}
+	numFound := 0
 
 	for _, tag := range p.imgTags {
-		img_url, _ := url.Parse(tag.url)
-		img_url = p.req.URL.ResolveReference(img_url)
+		go func(tag imgTag, ch chan parsedImage) {
+			u, _ := url.Parse(tag.url)
+			u = p.req.URL.ResolveReference(u)
 
-		// TODO: actually handle data urls
-		if strings.HasPrefix(img_url.String(), "data:") {
-			continue
-		}
-
-		go func(img_url *url.URL, tag imgTag) {
-			req, _ := http.NewRequest("GET", img_url.String(), nil)
-			req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
-			resp, err := p.client.Do(req)
-			if err != nil {
+			// TODO: actually handle data urls
+			if strings.HasPrefix(u.String(), "data:") {
+				ch <- parsedImage{}
 				return
 			}
 
-			img := image{
-				url:          img_url.String(),
-				content_type: resp.Header.Get("Content-Type"),
-
-				data: resp.Body,
-
-				alt:       tag.alt,
-				preferred: tag.preferred,
+			img, err := parseImage(p.client, u, tag)
+			if err != nil {
+				ch <- parsedImage{}
+				return
 			}
 
 			ch <- img
-		}(img_url, tag)
+		}(tag, ch)
 
-		found_images++
+		numFound++
 	}
 
-	if found_images == 0 {
-		return returned_images
+	if numFound == 0 {
+		return returned
 	}
 
-	timed_out := false
-	timed_out_ch := time.After(ImageLookupTimeout)
+	timeOutCh := time.After(ImageLookupTimeout)
 	for {
 		select {
-		case <-timed_out_ch:
-			timed_out = true
-
-		case incoming_img := <-ch:
-			ret_image := Image{}
-			switch incoming_img.content_type {
-			case "image/jpeg":
-				img, _ := jpeg.Decode(incoming_img.data)
-				if img != nil {
-					bounds := img.Bounds()
-					ret_image.Width = bounds.Max.X
-					ret_image.Height = bounds.Max.Y
-				}
-
-			case "image/gif":
-				img, _ := gif.Decode(incoming_img.data)
-				if img != nil {
-					bounds := img.Bounds()
-					ret_image.Width = bounds.Max.X
-					ret_image.Height = bounds.Max.Y
-				}
-
-			case "image/png":
-				img, _ := png.Decode(incoming_img.data)
-				if img != nil {
-					bounds := img.Bounds()
-					ret_image.Width = bounds.Max.X
-					ret_image.Height = bounds.Max.Y
-				}
-			}
-
-			if ret_image.Height > 0 {
-				ret_image.AspectRatio = round(float64(ret_image.Width)/float64(ret_image.Height), 1e-4)
-			}
-
-			ret_image.Type = incoming_img.content_type
-			ret_image.URL = incoming_img.url
-			ret_image.Alt = incoming_img.alt
-			ret_image.Preferred = incoming_img.preferred
-
-			returned_images = append(returned_images, ret_image)
-		}
-
-		if timed_out {
+		case <-timeOutCh:
 			break
+
+		case incoming := <-ch:
+			returned = append(returned, incoming.export())
 		}
 
-		if len(returned_images) >= found_images {
+		if len(returned) >= numFound {
 			break
 		}
 	}
 
-	sort.Sort(byPreferred(returned_images))
+	sort.Sort(byPreferred(returned))
 
-	return returned_images
+	return returned
 }
 
 func (t byPreferred) Less(a, b int) bool {
@@ -427,10 +376,7 @@ func (t byPreferred) Less(a, b int) bool {
 		return false
 	}
 
-	a_diff := math.Abs(t[a].AspectRatio - OptimalAspectRatio)
-	b_diff := math.Abs(t[b].AspectRatio - OptimalAspectRatio)
-
-	return a_diff < b_diff
+	return math.Abs(t[a].AspectRatio-OptimalAspectRatio) < math.Abs(t[b].AspectRatio-OptimalAspectRatio)
 }
 
 func (t byPreferred) Swap(a, b int) {
@@ -444,4 +390,64 @@ func (t byPreferred) Len() int {
 func round(a float64, prec float64) float64 {
 	temp := int64(math.Floor(a/prec + 0.5))
 	return float64(temp) * prec
+}
+
+func parseImage(client *http.Client, u *url.URL, tag imgTag) (parsedImage, error) {
+	req, _ := http.NewRequest("GET", u.String(), nil)
+	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
+	resp, err := client.Do(req)
+	if err != nil {
+		return parsedImage{}, err
+	}
+
+	return parsedImage{
+		url:         u.String(),
+		contentType: resp.Header.Get("Content-Type"),
+
+		data: resp.Body,
+
+		alt:       tag.alt,
+		preferred: tag.preferred,
+	}, nil
+}
+
+func (in parsedImage) export() Image {
+	out := Image{}
+
+	switch in.contentType {
+	case "image/jpeg":
+		img, _ := jpeg.Decode(in.data)
+		if img != nil {
+			bounds := img.Bounds()
+			out.Width = bounds.Max.X
+			out.Height = bounds.Max.Y
+		}
+
+	case "image/gif":
+		img, _ := gif.Decode(in.data)
+		if img != nil {
+			bounds := img.Bounds()
+			out.Width = bounds.Max.X
+			out.Height = bounds.Max.Y
+		}
+
+	case "image/png":
+		img, _ := png.Decode(in.data)
+		if img != nil {
+			bounds := img.Bounds()
+			out.Width = bounds.Max.X
+			out.Height = bounds.Max.Y
+		}
+	}
+
+	if out.Height > 0 {
+		out.AspectRatio = round(float64(out.Width)/float64(out.Height), 1e-4)
+	}
+
+	out.Type = in.contentType
+	out.URL = in.url
+	out.Alt = in.alt
+	out.Preferred = in.preferred
+
+	return out
 }
