@@ -48,7 +48,7 @@ func TestParseNYT(t *testing.T) {
 	testParse(
 		t,
 		"http://www.nytimes.com/2015/04/10/arts/television/on-game-of-thrones-season-5-a-change-of-scene.html",
-		"test-html/nyt-game-of-thrones.html.txt",
+		"test-html/nyt-game-of-thrones.html",
 		0,
 		ParseResult{
 			Title:  `On ‘Game of Thrones,’ a Change of Scene`,
@@ -61,7 +61,7 @@ func TestParseJS(t *testing.T) {
 	testParse(
 		t,
 		"https://jimmysawczuk.com/2015/03/once-more-with-feeling.html",
-		"test-html/jimmysawczuk-2015-mlb-preview.html.txt",
+		"test-html/jimmysawczuk-2015-mlb-preview.html",
 		0,
 		ParseResult{
 			Title:  `Once more, with feeling`,
@@ -75,7 +75,7 @@ func TestParse538(t *testing.T) {
 	testParse(
 		t,
 		"http://fivethirtyeight.com/datalab/our-33-weirdest-charts-from-2014/",
-		"test-html/fivethirtyeight-33-weirdest-charts.html.txt",
+		"test-html/fivethirtyeight-33-weirdest-charts.html",
 		0,
 		ParseResult{
 			Title:  `Our 33 Weirdest Charts From 2014`,
@@ -89,7 +89,7 @@ func TestParseCNN(t *testing.T) {
 	testParse(
 		t,
 		"http://www.cnn.com/2015/04/14/us/georgia-atlanta-public-schools-cheating-scandal-verdicts/index.html",
-		"test-html/cnn-open-tag-test.html.txt",
+		"test-html/cnn-open-tag-test.html",
 		0,
 		ParseResult{
 			Title:  `Prison time for some Atlanta school educators in cheating scandal - CNN.com`,
@@ -103,7 +103,7 @@ func TestParseNoImage(t *testing.T) {
 	testParse(
 		t,
 		"http://localhost/no-img-test.html",
-		"test-html/no-img-test.html.txt",
+		"test-html/no-img-test.html",
 		0,
 		ParseResult{
 			Title:  `Test`,
