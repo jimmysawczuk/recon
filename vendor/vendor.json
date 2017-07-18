@@ -25,14 +25,14 @@
 		{
 			"checksumSHA1": "vqc3a+oTUGX8PmD0TS+qQ7gmN8I=",
 			"path": "golang.org/x/net/html",
-			"revision": "8fd7f25955530b92e73e9e1932a41b522b22ccd9",
-			"revisionTime": "2016-12-29T20:13:24Z"
+			"revision": "b3756b4b77d7b13260a0a2ec658753cf48922eac",
+			"revisionTime": "2017-07-16T02:53:09Z"
 		},
 		{
 			"checksumSHA1": "00eQaGynDYrv3tL+C7l9xH0IDZg=",
 			"path": "golang.org/x/net/html/atom",
-			"revision": "8fd7f25955530b92e73e9e1932a41b522b22ccd9",
-			"revisionTime": "2016-12-29T20:13:24Z"
+			"revision": "b3756b4b77d7b13260a0a2ec658753cf48922eac",
+			"revisionTime": "2017-07-16T02:53:09Z"
 		}
 	],
 	"rootPath": "github.com/jimmysawczuk/recon"
