@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func testParse(t *testing.T, url string, local string, confidence float64, expected ParseResult) {
-	ImageLookupTimeout = 30 * time.Second
+func testParse(t *testing.T, url string, local string, confidence float64, expected Result) {
+	DefaultImageLookupTimeout = 30 * time.Second
 
 	assert := assert.New(t)
 
@@ -22,22 +22,27 @@ func testParse(t *testing.T, url string, local string, confidence float64, expec
 
 	buf := bytes.NewBuffer(contents)
 
-	p := NewParser()
-	p.reset()
-
-	p.req, err = http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		t.Errorf("Couldn't create request")
 		return
 	}
 
-	err = p.tokenize(buf, 0)
+	intRes := &parseJob{
+		request:    req,
+		requestURL: req.URL,
+		metaTags:   []metaTag{},
+		imgTags:    []imgTag{},
+	}
+
+	err = intRes.tokenize(buf)
 	if err != nil {
 		t.Errorf("Error tokenizing valid file: %s", err)
 		return
 	}
 
-	res := p.buildResult()
+	// imgs := p.analyzeImages(intRes.requestURL, intRes.imgTags)
+	res := intRes.buildResult([]Image{})
 
 	assert.Equal(expected.Title, res.Title, "Titles should match")
 	assert.Equal(expected.Author, res.Author, "Authors should match")
@@ -50,7 +55,7 @@ func TestParseNYT(t *testing.T) {
 		"http://www.nytimes.com/2015/04/10/arts/television/on-game-of-thrones-season-5-a-change-of-scene.html",
 		"test-html/nyt-game-of-thrones.html",
 		0,
-		ParseResult{
+		Result{
 			Title:  `On ‘Game of Thrones,’ a Change of Scene`,
 			Author: `Mike Hale`,
 		},
@@ -63,7 +68,7 @@ func TestParseJS(t *testing.T) {
 		"https://jimmysawczuk.com/2015/03/once-more-with-feeling.html",
 		"test-html/jimmysawczuk-2015-mlb-preview.html",
 		0,
-		ParseResult{
+		Result{
 			Title:  `Once more, with feeling`,
 			Author: ``,
 			Site:   `Cleveland, Curveballs and Common Sense`,
@@ -77,7 +82,7 @@ func TestParse538(t *testing.T) {
 		"http://fivethirtyeight.com/datalab/our-33-weirdest-charts-from-2014/",
 		"test-html/fivethirtyeight-33-weirdest-charts.html",
 		0,
-		ParseResult{
+		Result{
 			Title:  `Our 33 Weirdest Charts From 2014`,
 			Site:   `FiveThirtyEight`,
 			Author: `Andrei Scheinkman`,
@@ -91,7 +96,7 @@ func TestParseCNN(t *testing.T) {
 		"http://www.cnn.com/2015/04/14/us/georgia-atlanta-public-schools-cheating-scandal-verdicts/index.html",
 		"test-html/cnn-open-tag-test.html",
 		0,
-		ParseResult{
+		Result{
 			Title:  `Prison time for some Atlanta school educators in cheating scandal - CNN.com`,
 			Site:   `CNN`,
 			Author: `Ashley Fantz, CNN`,
@@ -105,7 +110,7 @@ func TestParseNoImage(t *testing.T) {
 		"http://localhost/no-img-test.html",
 		"test-html/no-img-test.html",
 		0,
-		ParseResult{
+		Result{
 			Title:  `Test`,
 			Site:   ``,
 			Author: ``,
@@ -126,7 +131,7 @@ func TestFullParse(t *testing.T) {
 func TestFullParseWithTimeout(t *testing.T) {
 	assert := assert.New(t)
 
-	ImageLookupTimeout = 0 * time.Second
+	DefaultImageLookupTimeout = 0 * time.Second
 
 	p := NewParser()
 	res, err := p.Parse("https://jimmysawczuk.com/2015/03/once-more-with-feeling.html")
@@ -145,8 +150,5 @@ func TestErrors(t *testing.T) {
 	assert.NotNil(err)
 
 	_, err = p.Parse("invalid url")
-	assert.NotNil(err)
-
-	_, err = p.ParseWithConfidence("http://www.google.com", -1)
 	assert.NotNil(err)
 }
