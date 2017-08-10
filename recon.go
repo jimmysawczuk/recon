@@ -2,10 +2,13 @@
 package recon
 
 import (
-	// "log"
+	"github.com/pkg/errors"
+	"golang.org/x/net/html"
 
 	"fmt"
-	"golang.org/x/net/html"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"math"
 	"net/http"
@@ -14,10 +17,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"image/gif"
-	"image/jpeg"
-	"image/png"
 )
 
 // Parser is the client object and holds the relevant information needed when parsing a URL
@@ -69,6 +68,17 @@ type Result struct {
 	Scraped time.Time `json:"scraped"`
 }
 
+// Image contains information about parsed images on the page
+type Image struct {
+	URL         string  `json:"url"`
+	Type        string  `json:"type"`
+	Width       int     `json:"width"`
+	Height      int     `json:"height"`
+	Alt         string  `json:"alt"`
+	AspectRatio float64 `json:"aspectRatio"`
+	Preferred   bool    `json:"preferred,omitempty"`
+}
+
 type metaTag struct {
 	name     string
 	value    string
@@ -79,17 +89,6 @@ type imgTag struct {
 	url       string
 	alt       string
 	preferred bool
-}
-
-// Image contains information about parsed images on the page
-type Image struct {
-	URL         string  `json:"url"`
-	Type        string  `json:"type"`
-	Width       int     `json:"width"`
-	Height      int     `json:"height"`
-	Alt         string  `json:"alt"`
-	AspectRatio float64 `json:"aspectRatio"`
-	Preferred   bool    `json:"preferred,omitempty"`
 }
 
 type parsedImage struct {
@@ -134,6 +133,12 @@ var OptimalAspectRatio = 1.91
 // DefaultImageLookupTimeout is the maximum amount of time recon will spend downloading and analyzing images
 var DefaultImageLookupTimeout = 10 * time.Second
 
+// Parse takes a url and attempts to parse it using a fresh Parser.
+func Parse(url string) (Result, error) {
+	p := NewParser()
+	return p.Parse(url)
+}
+
 // NewParser returns a new Parser object
 func NewParser() *Parser {
 	p := &Parser{
@@ -169,16 +174,16 @@ func (p *Parser) reset() {
 	p.client = p.getClient()
 }
 
-// Parse takes a url and attempts to parse it using a default minimum confidence of 0 (all information is used).
+// Parse takes a url and attempts to parse it.
 func (p *Parser) Parse(url string) (Result, error) {
 	p.reset()
 
-	job, err := p.doRequest(url)
+	job, err := p.parse(url)
 	if err != nil {
 		return Result{}, err
 	}
 
-	job.tokenize(job.response.Body)
+	job.tokenize()
 	imgs := p.analyzeImages(job.requestURL, job.imgTags)
 
 	res := job.buildResult(imgs)
@@ -186,7 +191,7 @@ func (p *Parser) Parse(url string) (Result, error) {
 	return res, nil
 }
 
-func (p *Parser) doRequest(url string) (*parseJob, error) {
+func (p *Parser) parse(url string) (*parseJob, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %s, url: %s", err, url)
@@ -210,8 +215,8 @@ func (p *Parser) doRequest(url string) (*parseJob, error) {
 	return result, nil
 }
 
-func (p *parseJob) tokenize(body io.Reader) error {
-	decoder := html.NewTokenizer(body)
+func (p *parseJob) tokenize() error {
+	decoder := html.NewTokenizer(p.response.Body)
 	done := false
 	for !done {
 		tt := decoder.Next()
@@ -255,6 +260,63 @@ func (p *parseJob) tokenize(body io.Reader) error {
 	return nil
 }
 
+func (p *Parser) parseImage(u *url.URL, tag imgTag) (parsedImage, error) {
+	req, _ := http.NewRequest("GET", u.String(), nil)
+	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return parsedImage{}, errors.Wrap(err, "parseImage")
+	}
+
+	return parsedImage{
+		url:         u.String(),
+		contentType: resp.Header.Get("Content-Type"),
+		data:        resp.Body,
+		alt:         tag.alt,
+		preferred:   tag.preferred,
+	}, nil
+}
+
+func (p *parseJob) buildResult(imgs []Image) Result {
+	res := Result{}
+
+	res.URL = p.requestURL.String()
+	res.Host = p.requestURL.Host
+	if canonicalURLStr := p.getMaxProperty("URL"); canonicalURLStr != "" {
+		canonicalURL, err := url.Parse(canonicalURLStr)
+		if err == nil {
+			res.URL = canonicalURL.String()
+			res.Host = canonicalURL.Host
+		}
+	}
+
+	res.Site = p.getMaxProperty("Site")
+	res.Title = p.getMaxProperty("Title")
+	res.Type = p.getMaxProperty("Type")
+	res.Description = p.getMaxProperty("Description")
+	res.Author = p.getMaxProperty("Author")
+	res.Publisher = p.getMaxProperty("Publisher")
+	res.Images = imgs
+	res.Scraped = time.Now()
+
+	return res
+}
+
+func (p *parseJob) getMaxProperty(key string) (val string) {
+	maxWeight := 0.0
+
+	for _, searchTag := range propertyMap[key] {
+		for _, tag := range p.metaTags {
+			if tag.name == searchTag && tag.priority > maxWeight {
+				val = tag.value
+				maxWeight = tag.priority
+			}
+		}
+	}
+
+	return
+}
+
 func parseMeta(t html.Token) metaTag {
 	var content string
 	var tag string
@@ -296,46 +358,6 @@ func parseImg(t html.Token) (i imgTag) {
 
 func parseTitle(t html.Token) metaTag {
 	return metaTag{name: "title", value: t.Data, priority: 0.5}
-}
-
-func (p *parseJob) buildResult(imgs []Image) Result {
-	res := Result{}
-
-	res.URL = p.requestURL.String()
-	res.Host = p.requestURL.Host
-	if canonicalURLStr := p.getMaxProperty("URL"); canonicalURLStr != "" {
-		canonicalURL, err := url.Parse(canonicalURLStr)
-		if err == nil {
-			res.URL = canonicalURL.String()
-			res.Host = canonicalURL.Host
-		}
-	}
-
-	res.Site = p.getMaxProperty("Site")
-	res.Title = p.getMaxProperty("Title")
-	res.Type = p.getMaxProperty("Type")
-	res.Description = p.getMaxProperty("Description")
-	res.Author = p.getMaxProperty("Author")
-	res.Publisher = p.getMaxProperty("Publisher")
-	res.Images = imgs
-	res.Scraped = time.Now()
-
-	return res
-}
-
-func (p *parseJob) getMaxProperty(key string) (val string) {
-	maxWeight := 0.0
-
-	for _, searchTag := range propertyMap[key] {
-		for _, tag := range p.metaTags {
-			if tag.name == searchTag && tag.priority > maxWeight {
-				val = tag.value
-				maxWeight = tag.priority
-			}
-		}
-	}
-
-	return
 }
 
 func (p *Parser) analyzeImages(baseURL *url.URL, tags []imgTag) []Image {
@@ -394,38 +416,19 @@ func (p *Parser) analyzeImages(baseURL *url.URL, tags []imgTag) []Image {
 			return false
 		}
 
-		return math.Abs(returned[a].AspectRatio-OptimalAspectRatio) < math.Abs(returned[b].AspectRatio-OptimalAspectRatio)
+		return math.Abs(float64(returned[a].AspectRatio)-OptimalAspectRatio) < math.Abs(float64(returned[b].AspectRatio)-OptimalAspectRatio)
 	})
 
 	return returned
 }
 
-func round(a float64, prec float64) float64 {
-	temp := int64(math.Floor(a/prec + 0.5))
-	return float64(temp) * prec
-}
-
-func (p *Parser) parseImage(u *url.URL, tag imgTag) (parsedImage, error) {
-	req, _ := http.NewRequest("GET", u.String(), nil)
-	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return parsedImage{}, err
-	}
-
-	return parsedImage{
-		url:         u.String(),
-		contentType: resp.Header.Get("Content-Type"),
-
-		data: resp.Body,
-
-		alt:       tag.alt,
-		preferred: tag.preferred,
-	}, nil
-}
-
 func (in parsedImage) export() Image {
-	out := Image{}
+	out := Image{
+		URL:       in.url,
+		Alt:       in.alt,
+		Preferred: in.preferred,
+		Type:      in.contentType,
+	}
 
 	switch in.contentType {
 	case "image/jpeg":
@@ -454,13 +457,8 @@ func (in parsedImage) export() Image {
 	}
 
 	if out.Height > 0 {
-		out.AspectRatio = round(float64(out.Width)/float64(out.Height), 1e-4)
+		out.AspectRatio = float64(out.Width) / float64(out.Height)
 	}
-
-	out.Type = in.contentType
-	out.URL = in.url
-	out.Alt = in.alt
-	out.Preferred = in.preferred
 
 	return out
 }

@@ -1,26 +1,21 @@
 package recon
 
 import (
-	"bytes"
 	"github.com/stretchr/testify/assert"
+
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
 
 func testParse(t *testing.T, url string, local string, confidence float64, expected Result) {
-	DefaultImageLookupTimeout = 30 * time.Second
-
-	assert := assert.New(t)
-
 	contents, err := ioutil.ReadFile(local)
 	if err != nil {
 		t.Errorf("Couldn't load test file")
 		return
 	}
-
-	buf := bytes.NewBuffer(contents)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -28,14 +23,18 @@ func testParse(t *testing.T, url string, local string, confidence float64, expec
 		return
 	}
 
+	testResponse := httptest.NewRecorder()
+	testResponse.Write(contents)
+
 	intRes := &parseJob{
 		request:    req,
 		requestURL: req.URL,
+		response:   testResponse.Result(),
 		metaTags:   []metaTag{},
 		imgTags:    []imgTag{},
 	}
 
-	err = intRes.tokenize(buf)
+	err = intRes.tokenize()
 	if err != nil {
 		t.Errorf("Error tokenizing valid file: %s", err)
 		return
@@ -44,34 +43,22 @@ func testParse(t *testing.T, url string, local string, confidence float64, expec
 	// imgs := p.analyzeImages(intRes.requestURL, intRes.imgTags)
 	res := intRes.buildResult([]Image{})
 
-	assert.Equal(expected.Title, res.Title, "Titles should match")
-	assert.Equal(expected.Author, res.Author, "Authors should match")
-	assert.Equal(expected.Site, res.Site, "Sites should match")
+	assert.Equal(t, expected.Title, res.Title, "Titles should match")
+	assert.Equal(t, expected.Author, res.Author, "Authors should match")
+	assert.Equal(t, expected.Site, res.Site, "Sites should match")
+	assert.Equal(t, expected.Description, res.Description, "Descriptions should match")
 }
 
 func TestParseNYT(t *testing.T) {
 	testParse(
 		t,
-		"http://www.nytimes.com/2015/04/10/arts/television/on-game-of-thrones-season-5-a-change-of-scene.html",
+		"https://www.nytimes.com/2015/04/10/arts/television/on-game-of-thrones-season-5-a-change-of-scene.html",
 		"test-html/nyt-game-of-thrones.html",
 		0,
 		Result{
-			Title:  `On ‘Game of Thrones,’ a Change of Scene`,
-			Author: `Mike Hale`,
-		},
-	)
-}
-
-func TestParseJS(t *testing.T) {
-	testParse(
-		t,
-		"https://jimmysawczuk.com/2015/03/once-more-with-feeling.html",
-		"test-html/jimmysawczuk-2015-mlb-preview.html",
-		0,
-		Result{
-			Title:  `Once more, with feeling`,
-			Author: ``,
-			Site:   `Cleveland, Curveballs and Common Sense`,
+			Title:       `On ‘Game of Thrones,’ a Change of Scene`,
+			Author:      `Mike Hale`,
+			Description: `Season 5 of HBO’s fantasy hit based on George R. R. Martin’s novels finds people on the move, on the road and in a couple of picturesque new settings.`,
 		},
 	)
 }
@@ -83,9 +70,10 @@ func TestParse538(t *testing.T) {
 		"test-html/fivethirtyeight-33-weirdest-charts.html",
 		0,
 		Result{
-			Title:  `Our 33 Weirdest Charts From 2014`,
-			Site:   `FiveThirtyEight`,
-			Author: `Andrei Scheinkman`,
+			Title:       `Our 33 Weirdest Charts From 2014`,
+			Site:        `FiveThirtyEight`,
+			Author:      `Andrei Scheinkman`,
+			Description: `We've made over 2,000 charts since FiveThirtyEight launched in March. With the new year upon us, here are some of our favorites, with an eye toward forms outside the usual dots, lines and bars.`,
 		},
 	)
 }
@@ -97,9 +85,10 @@ func TestParseCNN(t *testing.T) {
 		"test-html/cnn-open-tag-test.html",
 		0,
 		Result{
-			Title:  `Prison time for some Atlanta school educators in cheating scandal - CNN.com`,
-			Site:   `CNN`,
-			Author: `Ashley Fantz, CNN`,
+			Title:       `Prison time for some Atlanta school educators in cheating scandal - CNN.com`,
+			Site:        `CNN`,
+			Author:      `Ashley Fantz, CNN`,
+			Description: `Sparks flew in an Atlanta courtroom Tuesday as educators were sentenced in one of the most massive school cheating scandals in the country.`,
 		},
 	)
 }
@@ -119,36 +108,37 @@ func TestParseNoImage(t *testing.T) {
 }
 
 func TestFullParse(t *testing.T) {
-	assert := assert.New(t)
+	res, err := Parse("https://section411.com/2016/10/running-the-towpath/")
 
-	p := NewParser()
-	res, err := p.Parse("https://jimmysawczuk.com/2015/03/once-more-with-feeling.html")
+	assert.Nil(t, err)
+	assert.Equal(t, "Running the Towpath", res.Title)
 
-	assert.Equal(err, nil, "err should be nil")
-	assert.Equal("Once more, with feeling", res.Title)
+	preferredFound := false
+	for _, img := range res.Images {
+		if img.Preferred {
+			preferredFound = true
+			assert.Equal(t, "https://cdn.section411.com/h1KaJ7Bl?mw=2048", img.URL)
+			assert.Equal(t, 2048.0/1536.0, img.AspectRatio)
+		}
+	}
+
+	assert.True(t, preferredFound, "didn't find the preferred image")
 }
 
 func TestFullParseWithTimeout(t *testing.T) {
-	assert := assert.New(t)
+	p := NewParser().WithImageLookupTimeout(0 * time.Second)
+	res, err := p.Parse("https://section411.com/2016/10/running-the-towpath/")
 
-	DefaultImageLookupTimeout = 0 * time.Second
-
-	p := NewParser()
-	res, err := p.Parse("https://jimmysawczuk.com/2015/03/once-more-with-feeling.html")
-
-	assert.Equal(err, nil, "err should be nil")
-	assert.Equal("Once more, with feeling", res.Title)
+	assert.Nil(t, err)
+	assert.Equal(t, "Running the Towpath", res.Title)
 }
 
 func TestErrors(t *testing.T) {
-	assert := assert.New(t)
-
-	p := NewParser()
 	var err error
 
-	_, err = p.Parse("")
-	assert.NotNil(err)
+	_, err = Parse("")
+	assert.NotNil(t, err)
 
-	_, err = p.Parse("invalid url")
-	assert.NotNil(err)
+	_, err = Parse("invalid url")
+	assert.NotNil(t, err)
 }
