@@ -5,6 +5,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/html"
 
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"image/gif"
 	"image/jpeg"
@@ -356,6 +358,28 @@ func parseImg(t html.Token) (i imgTag) {
 	return imgTag{}
 }
 
+func parseImgFromData(i imgTag) (parsedImage, error) {
+	// get the image data from the url, decode it
+	parts := strings.SplitN(i.url, ";", 2)
+	header, body := parts[0], parts[1]
+	data := strings.Replace(body, "base64,", "", 1)
+	full, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return parsedImage{}, err
+	}
+
+	parts = strings.SplitN(header, ":", 2)
+	contentType := parts[1]
+
+	return parsedImage{
+		contentType: contentType,
+		data:        bytes.NewBuffer(full),
+		url:         i.url,
+		alt:         i.alt,
+		preferred:   i.preferred,
+	}, nil
+}
+
 func parseTitle(t html.Token) metaTag {
 	return metaTag{name: "title", value: t.Data, priority: 0.5}
 }
@@ -370,9 +394,13 @@ func (p *Parser) analyzeImages(baseURL *url.URL, tags []imgTag) []Image {
 			u, _ := url.Parse(tag.url)
 			u = baseURL.ResolveReference(u)
 
-			// TODO: actually handle data urls
 			if strings.HasPrefix(u.String(), "data:") {
-				ch <- parsedImage{}
+				img, err := parseImgFromData(tag)
+				if err != nil {
+					ch <- parsedImage{}
+				}
+
+				ch <- img
 				return
 			}
 
