@@ -127,7 +127,7 @@ func TestBase64GifImage(t *testing.T) {
 		Result{
 			Title: `base64-encoded gif test`,
 			Images: []Image{
-				Image{
+				{
 					URL:         obnoxiouslyLongDataURL,
 					Type:        "image/gif",
 					Alt:         "I'm surrounded by idiots",
