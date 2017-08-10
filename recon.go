@@ -172,7 +172,6 @@ func (p *Parser) Parse(url string) (Result, error) {
 
 	job.tokenize()
 	imgs := p.analyzeImages(job.requestURL, job.imgTags)
-
 	res := job.buildResult(imgs)
 
 	return res, nil
