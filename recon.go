@@ -135,7 +135,7 @@ var OptimalAspectRatio = 1.91
 // DefaultImageLookupTimeout is the maximum amount of time recon will spend downloading and analyzing images
 var DefaultImageLookupTimeout = 10 * time.Second
 
-// Parse takes a url and attempts to parse it using a fresh Parser.
+// Parse takes a url and attempts to parse it. This function instanciates a fresh Parser each time it's invoked.
 func Parse(url string) (Result, error) {
 	p := NewParser()
 	return p.Parse(url)
@@ -144,15 +144,16 @@ func Parse(url string) (Result, error) {
 // NewParser returns a new Parser object
 func NewParser() *Parser {
 	p := &Parser{
+		client:             getDefaultParserClient(),
 		imageLookupTimeout: DefaultImageLookupTimeout,
 	}
 
 	return p
 }
 
-// WithClient allows the user to specify a custom HTTP client, in the form of a func that returns the client. (This is so recon can use a new client for each parse.)
-func (p *Parser) WithClient(f func() *http.Client) *Parser {
-	p.customClient = f
+// WithClient allows the user to specify a custom HTTP client that the parser will use.
+func (p *Parser) WithClient(client *http.Client) *Parser {
+	p.client = client
 	return p
 }
 
@@ -162,25 +163,9 @@ func (p *Parser) WithImageLookupTimeout(t time.Duration) *Parser {
 	return p
 }
 
-func (p *Parser) getClient() *http.Client {
-	if p.customClient != nil {
-		return p.customClient()
-	}
-
-	client := http.DefaultClient
-	client.Jar, _ = cookiejar.New(nil)
-	return client
-}
-
-func (p *Parser) reset() {
-	p.client = p.getClient()
-}
-
 // Parse takes a url and attempts to parse it.
 func (p *Parser) Parse(url string) (Result, error) {
-	p.reset()
-
-	job, err := p.parse(url)
+	job, err := p.getHTML(url)
 	if err != nil {
 		return Result{}, err
 	}
@@ -193,7 +178,7 @@ func (p *Parser) Parse(url string) (Result, error) {
 	return res, nil
 }
 
-func (p *Parser) parse(url string) (*parseJob, error) {
+func (p *Parser) getHTML(url string) (*parseJob, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %s, url: %s", err, url)
@@ -317,6 +302,12 @@ func (p *parseJob) getMaxProperty(key string) (val string) {
 	}
 
 	return
+}
+
+func getDefaultParserClient() *http.Client {
+	client := http.DefaultClient
+	client.Jar, _ = cookiejar.New(nil)
+	return client
 }
 
 func parseMeta(t html.Token) metaTag {
