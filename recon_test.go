@@ -59,6 +59,31 @@ func testParse(t *testing.T, url string, local string, parseImages bool, expecte
 	}
 }
 
+func TestParseMalformed(t *testing.T) {
+	testParse(
+		t,
+		"http://localhost/malformed-url-test.html",
+		"test-html/malformed-url-test.html",
+		true,
+		Result{
+			Title:  `Test Malformed URL`,
+			Site:   ``,
+			Author: ``,
+			Images: []Image{
+				{
+					URL:         "",
+					Type:        "",
+					Alt:         "",
+					Width:       0,
+					Height:      0,
+					AspectRatio: 0,
+					Preferred:   false,
+				},
+			},
+		},
+	)
+}
+
 func TestParseNYT(t *testing.T) {
 	testParse(
 		t,
