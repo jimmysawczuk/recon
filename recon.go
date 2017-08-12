@@ -381,7 +381,12 @@ func (p *Parser) analyzeImages(baseURL *url.URL, tags []imgTag) []Image {
 
 	for _, tag := range tags {
 		go func(tag imgTag, ch chan parsedImage) {
-			u, _ := url.Parse(tag.url)
+			u, err := url.Parse(tag.url)
+			if err != nil {
+				// malformed image src
+				ch <- parsedImage{}
+				return
+			}
 			u = baseURL.ResolveReference(u)
 
 			if strings.HasPrefix(u.String(), "data:") {
