@@ -11,6 +11,10 @@ import (
 )
 
 func testParse(t *testing.T, url string, local string, parseImages bool, expected Result) {
+	testParseBufferMax(t, url, local, parseImages, 0, expected)
+}
+
+func testParseBufferMax(t *testing.T, url string, local string, parseImages bool, maxBuffer int, expected Result) {
 	contents, err := ioutil.ReadFile(local)
 	if err != nil {
 		t.Errorf("Couldn't load test file")
@@ -32,6 +36,7 @@ func testParse(t *testing.T, url string, local string, parseImages bool, expecte
 		response:   testResponse.Result(),
 		metaTags:   []metaTag{},
 		imgTags:    []imgTag{},
+		tokenMaxBuffer: maxBuffer,
 	}
 
 	err = intRes.tokenize()
@@ -57,6 +62,32 @@ func testParse(t *testing.T, url string, local string, parseImages bool, expecte
 	if parseImages {
 		assert.Equal(t, expected.Images, res.Images, "Images should match")
 	}
+}
+
+func TestParseMalformedHtml(t *testing.T) {
+	testParseBufferMax(
+		t,
+		"http://localhost/malformed-html-test.html",
+		"test-html/malformed-html-test.html",
+		true,
+		5,
+		Result{
+			Title:  `Test Malformed HTML`,
+			Site:   ``,
+			Author: ``,
+			Images: []Image{
+				{
+					URL:         "",
+					Type:        "",
+					Alt:         "",
+					Width:       0,
+					Height:      0,
+					AspectRatio: 0,
+					Preferred:   false,
+				},
+			},
+		},
+	)
 }
 
 func TestParseMalformed(t *testing.T) {

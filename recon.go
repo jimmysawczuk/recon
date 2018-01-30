@@ -25,7 +25,7 @@ import (
 type Parser struct {
 	customClient       func() *http.Client
 	imageLookupTimeout time.Duration
-
+	tokenMaxBuffer		int
 	client *http.Client
 }
 
@@ -35,6 +35,7 @@ type parseJob struct {
 	response   *http.Response
 	metaTags   []metaTag
 	imgTags    []imgTag
+	tokenMaxBuffer		int
 }
 
 // Result is what comes back from a Parse
@@ -163,6 +164,12 @@ func (p *Parser) WithImageLookupTimeout(t time.Duration) *Parser {
 	return p
 }
 
+// WithTokenMaxBuffer limits the amount of memory used by the HTML tokenizer.
+func (p *Parser) WithTokenMaxBuffer(s int) *Parser {
+	p.tokenMaxBuffer = s
+	return p
+}
+
 // Parse takes a url and attempts to parse it.
 func (p *Parser) Parse(url string) (Result, error) {
 	job, err := p.getHTML(url)
@@ -196,6 +203,7 @@ func (p *Parser) getHTML(url string) (*parseJob, error) {
 		response:   resp,
 		metaTags:   []metaTag{},
 		imgTags:    []imgTag{},
+		tokenMaxBuffer: p.tokenMaxBuffer,
 	}
 
 	return result, nil
@@ -203,6 +211,7 @@ func (p *Parser) getHTML(url string) (*parseJob, error) {
 
 func (p *parseJob) tokenize() error {
 	decoder := html.NewTokenizer(p.response.Body)
+	decoder.SetMaxBuf(p.tokenMaxBuffer)
 	done := false
 	for !done {
 		tt := decoder.Next()
