@@ -11,10 +11,6 @@ import (
 )
 
 func testParse(t *testing.T, url string, local string, parseImages bool, expected Result) {
-	testParseBufferMax(t, url, local, parseImages, 0, expected)
-}
-
-func testParseBufferMax(t *testing.T, url string, local string, parseImages bool, maxBuffer int, expected Result) {
 	contents, err := ioutil.ReadFile(local)
 	if err != nil {
 		t.Errorf("Couldn't load test file")
@@ -36,7 +32,6 @@ func testParseBufferMax(t *testing.T, url string, local string, parseImages bool
 		response:   testResponse.Result(),
 		metaTags:   []metaTag{},
 		imgTags:    []imgTag{},
-		tokenMaxBuffer: maxBuffer,
 	}
 
 	err = intRes.tokenize()
@@ -65,29 +60,35 @@ func testParseBufferMax(t *testing.T, url string, local string, parseImages bool
 }
 
 func TestParseMalformedHtml(t *testing.T) {
-	testParseBufferMax(
-		t,
-		"http://localhost/malformed-html-test.html",
-		"test-html/malformed-html-test.html",
-		true,
-		5,
-		Result{
-			Title:  `Test Malformed HTML`,
-			Site:   ``,
-			Author: ``,
-			Images: []Image{
-				{
-					URL:         "",
-					Type:        "",
-					Alt:         "",
-					Width:       0,
-					Height:      0,
-					AspectRatio: 0,
-					Preferred:   false,
-				},
-			},
-		},
-	)
+	contents, err := ioutil.ReadFile("test-html/malformed-html-test.html")
+	if err != nil {
+		t.Errorf("Couldn't load test file")
+		return
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost/malformed-html-test.html", nil)
+	if err != nil {
+		t.Errorf("Couldn't create request")
+		return
+	}
+
+	testResponse := httptest.NewRecorder()
+	testResponse.Write(contents)
+
+	intRes := &parseJob{
+		request:    req,
+		requestURL: req.URL,
+		response:   testResponse.Result(),
+		metaTags:   []metaTag{},
+		imgTags:    []imgTag{},
+		tokenMaxBuffer: 5,
+	}
+
+	err = intRes.tokenize()
+	if err == nil {
+		t.Error("Expected error tokenizing file")
+		return
+	}
 }
 
 func TestParseMalformed(t *testing.T) {
