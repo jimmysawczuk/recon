@@ -212,15 +212,17 @@ func (p *Parser) getHTML(url string) (*parseJob, error) {
 func (p *parseJob) tokenize() error {
 	decoder := html.NewTokenizer(p.response.Body)
 	decoder.SetMaxBuf(p.tokenMaxBuffer)
-	done := false
-	for !done {
+	loop:
+	for {
 		tt := decoder.Next()
 		switch tt {
 		case html.ErrorToken:
-			if decoder.Err() == io.EOF {
-				done = true
+			e := decoder.Err()
+			if e == io.EOF {
+				break loop
 			}
-
+			// some other kind of error
+			return e
 		case html.SelfClosingTagToken, html.StartTagToken:
 			t := decoder.Token()
 			switch t.Data {
