@@ -59,6 +59,38 @@ func testParse(t *testing.T, url string, local string, parseImages bool, expecte
 	}
 }
 
+func TestParseMalformedHtml(t *testing.T) {
+	contents, err := ioutil.ReadFile("test-html/malformed-html-test.html")
+	if err != nil {
+		t.Errorf("Couldn't load test file")
+		return
+	}
+
+	req, err := http.NewRequest("GET", "http://localhost/malformed-html-test.html", nil)
+	if err != nil {
+		t.Errorf("Couldn't create request")
+		return
+	}
+
+	testResponse := httptest.NewRecorder()
+	testResponse.Write(contents)
+
+	intRes := &parseJob{
+		request:    req,
+		requestURL: req.URL,
+		response:   testResponse.Result(),
+		metaTags:   []metaTag{},
+		imgTags:    []imgTag{},
+		tokenMaxBuffer: 5,
+	}
+
+	err = intRes.tokenize()
+	if err == nil {
+		t.Error("Expected error tokenizing file")
+		return
+	}
+}
+
 func TestParseMalformed(t *testing.T) {
 	testParse(
 		t,
