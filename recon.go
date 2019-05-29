@@ -362,6 +362,9 @@ func parseImg(t html.Token) (i imgTag) {
 func parseImgFromData(i imgTag) (parsedImage, error) {
 	// get the image data from the url, decode it
 	parts := strings.SplitN(i.url, ";", 2)
+	if len(parts) < 2 {
+		return parsedImage{}, nil
+	}
 	header, body := parts[0], parts[1]
 	data := strings.Replace(body, "base64,", "", 1)
 	full, err := base64.StdEncoding.DecodeString(data)

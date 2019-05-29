@@ -198,6 +198,30 @@ func TestBase64GifImage(t *testing.T) {
 	)
 }
 
+func TestBase64GifFaultyImage(t *testing.T) {
+	testParse(
+		t,
+		"http://localhost/gif-img-base64-faulty-test.html",
+		"test-html/gif-img-base64-faulty-test.html",
+		true,
+		Result{
+			Title: `base64-encoded gif faulty test`,
+			Images: []Image{
+				{
+					URL:         "",
+					Type:        "",
+					Alt:         "",
+					Width:       0,
+					Height:      0,
+					AspectRatio: 0,
+					Preferred:   false,
+				},
+			},
+		},
+	)
+}
+
+
 func TestFullParse(t *testing.T) {
 	res, err := Parse("https://section411.com/2016/10/running-the-towpath/")
 
