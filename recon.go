@@ -2,9 +2,6 @@
 package recon
 
 import (
-	"github.com/pkg/errors"
-	"golang.org/x/net/html"
-
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -19,6 +16,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+	"golang.org/x/net/html"
 )
 
 // Parser is the client object and holds the relevant information needed when parsing a URL
@@ -174,10 +174,13 @@ func (p *Parser) WithTokenMaxBuffer(s int) *Parser {
 func (p *Parser) Parse(url string) (Result, error) {
 	job, err := p.getHTML(url)
 	if err != nil {
-		return Result{}, err
+		return Result{}, errors.Wrap(err, "get html")
 	}
 
-	job.tokenize()
+	if err := job.tokenize(); err != nil {
+		return Result{}, errors.Wrap(err, "tokenize")
+	}
+
 	imgs := p.analyzeImages(job.requestURL, job.imgTags)
 	res := job.buildResult(imgs)
 
@@ -212,17 +215,17 @@ func (p *Parser) getHTML(url string) (*parseJob, error) {
 func (p *parseJob) tokenize() error {
 	decoder := html.NewTokenizer(p.response.Body)
 	decoder.SetMaxBuf(p.tokenMaxBuffer)
-loop:
+
 	for {
 		tt := decoder.Next()
 		switch tt {
 		case html.ErrorToken:
-			e := decoder.Err()
-			if e == io.EOF {
-				break loop
+			err := decoder.Err()
+			if err == io.EOF {
+				return nil
 			}
-			// some other kind of error
-			return e
+			return err
+
 		case html.SelfClosingTagToken, html.StartTagToken:
 			t := decoder.Token()
 			switch t.Data {
@@ -253,8 +256,6 @@ loop:
 			}
 		}
 	}
-
-	return nil
 }
 
 func (p *Parser) parseImage(u *url.URL, tag imgTag) (parsedImage, error) {
@@ -362,6 +363,10 @@ func parseImg(t html.Token) (i imgTag) {
 func parseImgFromData(i imgTag) (parsedImage, error) {
 	// get the image data from the url, decode it
 	parts := strings.SplitN(i.url, ";", 2)
+	if len(parts) < 2 {
+		return parsedImage{}, errors.New("malformed data url")
+	}
+
 	header, body := parts[0], parts[1]
 	data := strings.Replace(body, "base64,", "", 1)
 	full, err := base64.StdEncoding.DecodeString(data)
