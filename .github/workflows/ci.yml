@@ -1,16 +1,22 @@
 name: CI
 on:
-  - push
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-20.04
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Run go vet
-      run: |
-        go vet ./...
-    - name: Run go test
-      run: |
-        go test -cover -v -race ./...
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run go vet
+        run: |
+          go vet ./...
+      - name: Run go test
+        run: |
+          go test -cover -v -race ./...
