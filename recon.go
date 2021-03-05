@@ -27,6 +27,7 @@ type Parser struct {
 	imageLookupTimeout time.Duration
 	tokenMaxBuffer     int
 	client             *http.Client
+	headers            http.Header
 }
 
 type parseJob struct {
@@ -170,6 +171,12 @@ func (p *Parser) WithTokenMaxBuffer(s int) *Parser {
 	return p
 }
 
+// WithHeaders allows the user to set the HTTP request headers
+func (p *Parser) WithHeaders(h http.Header) *Parser {
+	p.headers = h
+	return p
+}
+
 // Parse takes a url and attempts to parse it.
 func (p *Parser) Parse(url string) (Result, error) {
 	job, err := p.getHTML(url)
@@ -187,15 +194,30 @@ func (p *Parser) Parse(url string) (Result, error) {
 	return res, nil
 }
 
-func (p *Parser) getHTML(url string) (*parseJob, error) {
+func (p *Parser) newReq(url string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %s, url: %s", err, url)
 	}
 
 	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
+	for k, vv := range p.headers {
+		req.Header[k] = vv
+	}
+
+	return req, nil
+}
+
+func (p *Parser) getHTML(url string) (*parseJob, error) {
+	req, err := p.newReq(url)
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := p.client.Do(req)
+	if err == nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
+		err = errors.New(resp.Status)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("http error: %s, url: %s", err, url)
 	}
@@ -259,8 +281,7 @@ func (p *parseJob) tokenize() error {
 }
 
 func (p *Parser) parseImage(u *url.URL, tag imgTag) (parsedImage, error) {
-	req, _ := http.NewRequest("GET", u.String(), nil)
-	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
+	req, _ := p.newReq(u.String())
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return parsedImage{}, errors.Wrap(err, "parseImage")
