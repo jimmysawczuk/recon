@@ -208,7 +208,7 @@ func TestFullParse(t *testing.T) {
 	for _, img := range res.Images {
 		if img.Preferred {
 			preferredFound = true
-			assert.Equal(t, "https://cdn.section411.com/h1KaJ7Bl/2048x", img.URL)
+			assert.Equal(t, "https://cdn.section411.com/h1KaJ7Bl/1536x.jpg", img.URL)
 			assert.Equal(t, 2048.0/1536.0, img.AspectRatio)
 		}
 	}
