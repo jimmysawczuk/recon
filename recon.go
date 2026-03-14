@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/cookiejar"
@@ -201,9 +202,7 @@ func (p *Parser) newReq(url string) (*http.Request, error) {
 	}
 
 	req.Header.Add("User-Agent", "recon (github.com/jimmysawczuk/recon; similar to Facebot, facebookexternalhit/1.1)")
-	for k, vv := range p.headers {
-		req.Header[k] = vv
-	}
+	maps.Copy(req.Header, p.headers)
 
 	return req, nil
 }
