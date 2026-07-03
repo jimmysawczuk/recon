@@ -23,8 +23,8 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: Check gofumpt
-        run: |
-          go tool gofumpt -l . | tee /dev/stderr | diff - /dev/null
+        if: runner.os == 'Linux'
+        run: go tool gofumpt -l . | diff - /dev/null
       - name: Run go vet
         run: |
           go vet ./...
