@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        go: ["1.24", "1.25", "1.26"]
+        go: ["1.25", "1.26"]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -22,6 +22,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
+      - name: Check gofumpt
+        run: |
+          go tool gofumpt -l . | tee /dev/stderr | diff - /dev/null
       - name: Run go vet
         run: |
           go vet ./...
