@@ -4,6 +4,7 @@ package recon
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image/gif"
 	"image/jpeg"
@@ -18,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/html"
 )
 
@@ -182,11 +182,11 @@ func (p *Parser) WithHeaders(h http.Header) *Parser {
 func (p *Parser) Parse(url string) (Result, error) {
 	job, err := p.getHTML(url)
 	if err != nil {
-		return Result{}, errors.Wrap(err, "get html")
+		return Result{}, fmt.Errorf("get html: %w", err)
 	}
 
 	if err := job.tokenize(); err != nil {
-		return Result{}, errors.Wrap(err, "tokenize")
+		return Result{}, fmt.Errorf("tokenize: %w", err)
 	}
 
 	imgs := p.analyzeImages(job.requestURL, job.imgTags)
@@ -283,7 +283,7 @@ func (p *Parser) parseImage(u *url.URL, tag imgTag) (parsedImage, error) {
 	req, _ := p.newReq(u.String())
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return parsedImage{}, errors.Wrap(err, "parseImage")
+		return parsedImage{}, fmt.Errorf("parseImage: %w", err)
 	}
 
 	return parsedImage{
@@ -366,9 +366,10 @@ func parseMeta(t html.Token) metaTag {
 
 func parseImg(t html.Token) (i imgTag) {
 	for _, v := range t.Attr {
-		if v.Key == "src" {
+		switch v.Key {
+		case "src":
 			i.url = v.Val
-		} else if v.Key == "alt" {
+		case "alt":
 			i.alt = v.Val
 		}
 	}
